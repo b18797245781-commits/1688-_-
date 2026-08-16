@@ -1,0 +1,1 @@
+(window.webpackJsonp=window.webpackJsonp||[]).push([[88],{2301:function(e,o,n){"use strict";n.r(o);var t={components:{chooseWarehouse:n(1865).a}},c=n(0),component=Object(c.a)(t,function(){return(0,this._self._c)("chooseWarehouse",{attrs:{"warehouse-type":2}})},[],!1,null,null,null);o.default=component.exports}}]);

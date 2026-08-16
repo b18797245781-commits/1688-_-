@@ -1,0 +1,365 @@
+(function () {
+    var appKey = (function () {
+        var e = document.currentScript;
+        if (!e) {
+            var t = document.scripts;
+            e = t[t.length - 1];
+        }
+        return e && e.getAttribute("appkey");
+    })();
+
+    var always = (function () {
+        var e = document.currentScript;
+        if (!e) {
+            var t = document.scripts;
+            e = t[t.length - 1];
+        }
+        return (e && e.getAttribute("appkey")) ? true : false;
+    })();
+
+    let userInfo = {
+        userId: "0", //用户ID
+        userName: "游客", //用户名称
+        userTel: "88888888", //用户的电话号码
+        userTime: "2000-01-01 00:00:00", //用户创建时间
+        version: "" //版本信息
+    };
+    if (document.cookie) {
+        var arr = document.cookie.match(new RegExp("(^| )" + "dld_user" + "=([^;]*)(;|$)"));
+        if (arr != null) {
+            let dld_user = JSON.parse(unescape(arr[2]));
+            userInfo = {
+                userId: dld_user.dldId, //用户ID
+                userName: "", //用户名称
+                userTel: dld_user.hideMobilePhone, //用户的电话号码
+                userTime: dld_user.ctime, //用户创建时间
+                version: "" //版本信息
+            };
+        }
+    }
+    // 声明公共的方法
+    var $ = {
+        //发送请求
+        ajax: function (options) {
+            if (options.t && options.t === "eventError") {
+                return;
+            }
+            if (options.c) {
+                if (options.c.indexOf("evaluating") !== -1 || options.c.indexOf("local_obj.viewHtml") !== -1) {
+                    return;
+                }
+                //阻止无效错误
+                if (options.c.indexOf("Loading CSS chunk") === 0) {
+                    return;
+                }
+                if (options.c.indexOf("WeixinJSBridge") !== -1) {
+                    return;
+                }
+                if (options.c.indexOf("_sendMessage") !== -1) {
+                    return;
+                }
+            }
+            if (!appKey) {
+                return;
+            }
+            if (options.t === "click") {
+                console.log("埋点数据：", "['" + options.p + "','" + options.c + "']");
+            }
+
+            //如果是IP请求 直接阻止
+            if ((/^(\d{1,2}|1\d\d|2[0-4]\d|25[0-5])\.(\d{1,2}|1\d\d|2[0-4]\d|25[0-5])\.(\d{1,2}|1\d\d|2[0-4]\d|25[0-5])\.(\d{1,2}|1\d\d|2[0-4]\d|25[0-5])$/.test(location.hostname)) && !always) {
+                return;
+            }
+
+            if (location.host.indexOf("localhost") !== -1) {
+                return;
+            }
+
+            if (location.host.indexOf("test") !== -1 && location.host.indexOf("testferet") === -1) {
+                return;
+            }
+
+            if (options.t === "hashchange" && options.ou) {
+                var ou = (options.ou.split("?")[0] + "").toLowerCase();
+                var oq = options.ou.split("?")[1];
+                options.ou = ou;
+                options.oq = oq || "";
+            }
+            if (options.t === "hashchange" && options.u) {
+                var u = (options.u.split("?")[0] + "").toLowerCase();
+                var q = options.u.split("?")[1];
+                options.u = u;
+                options.q = q || "";
+            }
+            if ($.pageTime && (options.t === "hashchange" || options.t === "beforeunload")) {
+                options.st = new Date().getTime() - $.pageTime;
+            }
+            if (options.t === "load" || options.t === "hashchange") {
+                $.pageTime = new Date().getTime();
+            }
+            var isTest = null;
+            try {
+                isTest = localStorage.getItem("isTest");
+            } catch (e) { }
+
+            if (isTest) {
+                return;
+            }
+            var baseOpts = {
+                t: options.t,
+                si: appKey, //项目ID 根据URL 自动生成
+                ua: navigator.userAgent, //浏览器信息
+                u: (location.origin + location.pathname + location.hash.split("?")[0]).toLowerCase(),
+                q: (location.hash || location.search).split("?")[1] || "",
+                uid: userInfo.userId || "", //用户ID
+                uname: userInfo.userName || "", //用户名称
+                utel: userInfo.userTel || "", //用户的电话号码
+                ut: userInfo.userTime ? $.dateTimeFormat(userInfo.userTime, "yyyy-MM-dd hh:mm:ss") : "", //用户创建时间
+                v: /^[0-9]*$/.test(userInfo.version) ? userInfo.version : "0", //版本信息
+                ts: new Date().getTime()
+            };
+
+            var extendOpts = $.extend(baseOpts, options);
+            var params = "";
+            for (var item in extendOpts) {
+                if (item === "q" || item === "oq") {
+                    extendOpts[item] = (extendOpts[item] + "").replace(/t=\d{13}/, "t=timestamp");
+                }
+                params += "&" + item + "=" + encodeURIComponent(extendOpts[item]);
+            }
+            var image = new Image();
+            image.src = "//hm.dianleida.net/data/analysis/hm.gif?" + params.substring(1);
+        },
+        storageBaseUrl: function () {
+            sessionStorage.setItem(
+                "dldhmBaseURL",
+                JSON.stringify({
+                    u: (location.origin + location.pathname + location.hash.split("?")[0]).toLowerCase(),
+                    q: (location.hash || location.search).split("?")[1] || ""
+                })
+            );
+        },
+        //简易对象合并
+        extend: function () {
+            var obj = {};
+            for (var i = 0; i < arguments.length; i++) {
+                var item = arguments[i];
+                for (var key in item) {
+                    obj[key] = item[key];
+                }
+            }
+            return obj;
+        },
+        pageTime: null,
+        url: {},
+        dateTimeFormat: function (date, format) {
+            if (typeof date == "string") {
+                date = date.replace(/-/g, "/").replace("T", " ");
+                var mts = date.match(/(\/Date\((\d+)\)\/)/);
+                if (mts && mts.length >= 3) {
+                    date = parseInt(mts[2]);
+                }
+            }
+            date = new Date(date);
+            if (!date || date.toUTCString() == "Invalid Date") {
+                return "";
+            }
+            var map = {
+                M: date.getMonth() + 1,
+                d: date.getDate(),
+                h: date.getHours(),
+                m: date.getMinutes(),
+                s: date.getSeconds(),
+                q: Math.floor((date.getMonth() + 3) / 3),
+                S: date.getMilliseconds()
+            };
+            format = format.replace(/([yMdhmsqS])+/g, function (all, t) {
+                var v = map[t];
+
+                if (v !== undefined) {
+                    if (all.length > 1) {
+                        v = "0" + v;
+                        v = v.substr(v.length - 2);
+                    }
+                    return v;
+                } else if (t === "y") {
+                    return (date.getFullYear() + "").substr(4 - all.length);
+                }
+                return all;
+            });
+            return format;
+        }
+    };
+    window.dld_hm = {
+        appKey: appKey,
+        push: function (e) {
+            if (Object.prototype.toString.call(e) === "[object Array]") {
+                if (e[0] === "_trackEvent" && e[1]) {
+                    $.ajax({
+                        t: "click",
+                        p: e[1],
+                        c: e[2] || ""
+                    });
+                }
+            } else if (Object.prototype.toString.call(e) === "[object Object]") {
+                if (e.t) {
+                    $.ajax(e);
+                }
+            }
+        }
+    };
+
+    //监听页面显示
+    document.addEventListener("visibilitychange", function () {
+        var hiddenProperty = "hidden" in document ? "hidden" : "webkitHidden" in document ? "webkitHidden" : null;
+        if (!document[hiddenProperty]) {
+            $.storageBaseUrl();
+        }
+    });
+
+    //监听所有的点击事件
+    document.addEventListener(
+        "click",
+        function (e) {
+            if (!e.target.dataset) {
+                return;
+            }
+            var point = e.target.dataset.point;
+            point &&
+                $.ajax({
+                    t: "click",
+                    p: point.split("_")[0],
+                    c: point.split("_")[1] || ""
+                });
+        },
+        true
+    );
+    // //监听页面的加载
+    window.addEventListener(
+        "load",
+        function () {
+            function getTiming() {
+                try {
+                    var time = performance.timing;
+                    var t = {};
+                    if (time.loadEventEnd <= 0) {
+                        setTimeout(function () {
+                            getTiming();
+                        }, 200);
+                        return;
+                    }
+
+                    t["重定向时间"] = time.redirectEnd - time.redirectStart;
+                    t["DNS解析时间"] = time.domainLookupEnd - time.domainLookupStart;
+                    t["TCP完成握手时间"] = time.connectEnd - time.connectStart;
+                    t["HTTP请求响应完成时间"] = time.responseEnd - time.requestStart;
+                    t["DOM开始加载前所花费时间"] = time.responseEnd - time.navigationStart;
+                    t["DOM加载完成时间"] = time.domComplete - time.domLoading;
+                    t["DOM结构解析完成时间"] = time.domInteractive - time.domLoading;
+                    t["脚本加载时间"] = time.domContentLoadedEventEnd - time.domContentLoadedEventStart;
+                    t["白屏时间"] = time.responseStart - time.navigationStart;
+                    t["load事件时间"] = time.loadEventEnd - time.navigationStart;
+                    t["页面完全加载时间"] = t["重定向时间"] + t["DNS解析时间"] + t["TCP完成握手时间"] + t["HTTP请求响应完成时间"] + t["DOM结构解析完成时间"] + t["DOM加载完成时间"];
+                    let dldhmBaseURL = null;
+                    if (sessionStorage.getItem("dldhmBaseURL")) {
+                        dldhmBaseURL = JSON.parse(sessionStorage.getItem("dldhmBaseURL"));
+                    }
+                    $.ajax({
+                        t: "load",
+                        ou: dldhmBaseURL ? dldhmBaseURL.u : "",
+                        oq: dldhmBaseURL ? dldhmBaseURL.q : "",
+                        c: JSON.stringify(t),
+                        st: t["load事件时间"]
+                    });
+                    $.storageBaseUrl();
+                } catch (e) {
+                    $.ajax({
+                        t: "load"
+                    });
+                }
+            }
+            getTiming();
+        },
+        true
+    );
+    //监听页面错误
+    window.addEventListener(
+        "error",
+        function (e) {
+            if (e instanceof ErrorEvent) {
+                //脚本错误
+                if (e.message === "Script error.") {
+                    return;
+                }
+                if (e.error) {
+                    $.ajax({
+                        t: "eventError",
+                        c: e.error && e.error.message ? e.error.message : e.message,
+                        em: e.error && e.error.stack ? e.error.stack : ""
+                    });
+                }
+            } else if (e instanceof Event) {
+                var target = e.target || e.srcElement;
+                var c = target.src || target.href;
+                if (/\.(jpg|png|gif|webp|mp4|js|css)$/.test(c)) {
+                    //资源错误
+                    $.ajax({
+                        t: "resourceError",
+                        c: c,
+                        em: JSON.stringify({
+                            nodeName: target.nodeName,
+                            outerHTML: target.outerHTML
+                        })
+                    });
+                }
+            }
+        },
+        true
+    );
+    //捕获promise错误
+    window.addEventListener(
+        "unhandledrejection",
+        function (e) {
+            var reason = e.reason || {};
+            let response = reason.response || reason;
+            if (response.config) {
+                if ((response.statusText || response.message) === "Network Error") {
+                    return;
+                }
+                $.ajax({
+                    t: "requestError",
+                    c: JSON.stringify({
+                        data: response.config.data
+                    }),
+                    ru: response.config.url,
+                    rc: response.status,
+                    ec: response.status,
+                    em: response.statusText || response.message || (response.data ? response.data.error : "")
+                });
+            } else {
+                if (reason.message && reason.message !== "Network Error") {
+                    $.ajax({
+                        t: "eventError",
+                        c: reason.message,
+                        em: reason.stack
+                    });
+                }
+            }
+        },
+        true
+    );
+    // 重写consele.error  用来捕获错误
+    (function () {
+        var oldError = console.error;
+        console.error = function () {
+            if (arguments[0] && arguments[0].message) {
+                $.ajax({
+                    t: "consoleError",
+                    c: arguments[0].message,
+                    em: arguments[0].stack
+                });
+            }
+            return oldError.apply(console, arguments);
+        };
+    })();
+})();

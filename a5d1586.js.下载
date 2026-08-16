@@ -1,0 +1,1 @@
+(window.webpackJsonp=window.webpackJsonp||[]).push([[101],{2284:function(t,n,o){"use strict";o.r(n);var r={components:{productList:o(1864).a},data:function(){return{}}},c=o(0),component=Object(c.a)(r,function(){return(0,this._self._c)("productList",{attrs:{"is-cross-border":!0}})},[],!1,null,null,null);n.default=component.exports}}]);
